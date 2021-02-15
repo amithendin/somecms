@@ -1,0 +1,62 @@
+<div class="container">
+    <div class="row h3 mb-4">
+        <button type="button" class="col-sm-2 btn btn-secondary btn-sm toggle-btn"
+                on-label="create new model"
+                off-label="close"
+                toggle-element="#model-input">create new model</button>
+    </div>
+
+    <div id="new-field-elem" style="display:none;">
+        <div class="input-group mb-3" field-value-input=".data-type-select" field-name-input=".new-field-name">
+            <div class="input-group-prepend">
+                <select class="input-group-select data-type-select">
+                    {% for data_type in data_types %}
+                    <option class="data-type-{{ data_type.1 }}" value="{{ data_type.0 }}">{{ data_type.0 }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <input type="text" class="form-control new-field-name" placeholder="name" aria-label="new field name" aria-describedby="new-field-name">
+
+            <button type="button" class="btn btn-outline-danger btn-sm remove-elem-btn"
+                    elem="parent">delete</button>
+        </div>
+    </div>
+    <div class="row mb-2" id="model-input" style="display:none;">
+        <div class="col-sm-3 btn-group mb-3" role="group" aria-label="model creation toolbar">
+            <button type="button" class="btn btn-secondary btn-sm make-elem-btn"
+                    template-selector="#new-field-elem"
+                    container-selector="#model-input">add field</button>
+
+            <button type="button" class="btn btn-success btn-sm http-btn"
+                    beforesend="setModelName"
+                    method="post"
+                    url="/api/"
+                    data="serializeInputGroups('#model-input')"
+                    onresponse="reloadModels()">create new model</button>
+        </div>
+        <div class="input-group mb-3" field-name="model-name">
+            <span class="input-group-text" id="new-model-name">model name</span>
+            <input type="text" class="form-control" placeholder="name" aria-label="new model name" aria-describedby="new-model-name">
+        </div>
+
+    </div>
+    {% for model in models %}
+    <div class="row contianer mb-4">
+        {{model | safe}}
+    </div>
+    {% endfor %}
+</div>
+<script>
+    window.setModelName = function (obj) {
+        var modelName = (' ' + obj.data['model-name']).slice(1);
+        obj.url += modelName;
+        delete obj.data['model-name'];
+        console.log('obj',obj);
+        return obj;
+    };
+
+    function reloadModels() {
+        location.reload();
+    }
+</script>

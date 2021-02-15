@@ -1,0 +1,24 @@
+<div class="row h3">
+    <div class="col">{{ model }}</div>
+    <a class="col view-instances-link" href="/ui/{{ model }}">view instances</a>
+    <div class="col btn-group" role="group" aria-label="model toolbar">
+        <button type="button" class="btn btn-secondary btn-sm">update</button>
+        <button type="button" class="btn btn-danger btn-sm http-btn"
+                method="delete"
+                url="/api/{{ model }}"
+                onresponse="reloadModels()">delete</button>
+    </div>
+</div>
+<div class="row container-fluid model-view">
+    {% for field in fields %}
+    {% if field.0 == "id" %}{% continue %}{% endif %}
+    <div class="row">
+        <div class="col-sm-2">
+            {{ field.0 }}
+        </div>
+        <div class="col {{ field.1 }}-field">
+            {{ field.1 }}
+        </div>
+    </div>
+    {% endfor %}
+</div>

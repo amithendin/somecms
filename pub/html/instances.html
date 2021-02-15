@@ -1,0 +1,42 @@
+<div class="container">
+    <div class="row h3 mb-4">
+        <div class="col">{{ model }} <span style="color: red;">instances</span></div>
+        <a class="col view-instances-link" href="/ui">view models</a>
+        <button type="button" class="col-sm btn btn-secondary btn-sm toggle-btn"
+                on-label="create new instance"
+                off-label="close"
+                toggle-element="#instance-input">create new instance</button>
+    </div>
+    <div class="row mb-2" id="instance-input" style="display:none;">
+        {% for field in fields %}
+        {% if field.0 == "id" %}{% continue %}{% endif %}
+        <div class="input-group mb-3">
+            <span class="input-group-text" id="field-{{ model }}-{{ field.0 }}">{{ field.0 }}</span>
+            {% if field.1 == "text" %}
+            <input type="text" class="form-control" placeholder="{{ field.1 }}" aria-label="{{ field.0 }}" aria-describedby="field-{{ model }}-{{ field.0 }}">
+            {%elif field.1 == "int" %}
+            <input type="number" step="1" class="form-control" placeholder="{{ field.1 }}" aria-label="{{ field.0 }}" aria-describedby="field-{{ model }}-{{ field.0 }}">
+            {%elif field.1 == "bool" %}
+            <input class="form-check-input" type="checkbox" value="" style="width:2em;margin-top: 0px;height: auto;">
+            {% else %}
+            <input class="form-control" type="text" placeholder="{{ field.1 }}" aria-label="data type not supported in UI input" disabled readonly>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <button type="button" class="col-sm-2 btn btn-success btn-sm http-btn"
+                method="put"
+                url="/api/{{ model }}"
+                data="serializeInputGroups('#instance-input')"
+                onresponse="reloadInstances()">create new instance</button>
+    </div>
+    {% for instance in instances %}
+    <div class="row contianer-fluid mb-4">
+        {{instance | safe}}
+    </div>
+    {% endfor %}
+</div>
+<script>
+    function reloadInstances() {
+        location.reload();
+    }
+</script>

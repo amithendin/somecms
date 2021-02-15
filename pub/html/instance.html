@@ -1,0 +1,20 @@
+{% for field in fields %}
+    {% set i = loop.index0 %}
+    <div class="row">
+        <div class="col-sm-2">
+            {{ field.0 }}
+        </div>
+        <div class="col {{ field.1 }}-field">
+            {{ instance[i] }}
+        </div>
+        {% if i == 0 %}
+        <div class="col-sm-2 btn-group" role="group" aria-label="instance toolbar">
+            <button type="button" class="btn btn-secondary btn-sm">update</button>
+            <button type="button" class="btn btn-danger btn-sm http-btn"
+                    method="delete"
+                    url="/api/{{ model }}/{{ instance[i] }}"
+                    onresponse="reloadInstances()">delete</button>
+        </div>
+        {% endif %}
+    </div>
+{% endfor %}

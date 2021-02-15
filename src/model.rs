@@ -3,6 +3,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use r2d2::PooledConnection;
 use serde_json::Value;
 use std::collections::HashMap;
+use crate::util::{DataType, MetaType};
 
 pub struct Model {
     pub name: String,
@@ -10,6 +11,17 @@ pub struct Model {
 }
 
 impl Model {
+
+    pub fn get_types(conn: &PooledConnection<SqliteConnectionManager>) -> Vec<DataType> {
+        let data_types = vec![
+            DataType { name: String::from("text"), meta_type: MetaType::Primitive },
+            DataType { name: String::from("int"), meta_type: MetaType::Primitive },
+            DataType { name: String::from("bool"), meta_type: MetaType::Primitive }
+        ];
+
+        data_types
+    }
+
     pub fn get_all(conn: &PooledConnection<SqliteConnectionManager>) -> Vec<Model> {
         let mut models_stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'").unwrap();
         let model_names = models_stmt.query_map(NO_PARAMS, |field| {

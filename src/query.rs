@@ -71,7 +71,7 @@ pub fn select_query(conn: &PooledConnection<SqliteConnectionManager>, model: &Mo
                 let val: String = row.get(i).unwrap();
                 result.push_str(format!("\"{}\": \"{}\",", k, val).as_str());
 
-            }else if v == "integer" {
+            }else if v == "int" || v == "integer" {
                 let val: u32 = row.get(i).unwrap();
                 result.push_str(format!("\"{}\": {},", k, val).as_str());
 

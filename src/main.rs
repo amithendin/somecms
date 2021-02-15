@@ -10,6 +10,7 @@ extern crate rusqlite;
 extern crate serde_json;
 #[macro_use]
 extern crate log;
+extern crate tera;
 mod model;
 mod instance;
 mod util;
@@ -37,13 +38,14 @@ use r2d2::PooledConnection;
 use crate::somelogger::SomeLogger;
 use log::{SetLoggerError, LevelFilter};
 use log::{info, warn, error};
-use crate::ui::build_html_footer;
+use tokio_util::codec::BytesCodec;
+use tera::{Tera, Context, Function};
 
 async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<Body>) -> Result<Response<Body>, Infallible> {
     let mut response = String::new();
     let mut content_type = "application/json";
     let path_str = _req.uri().path().to_string();
-    let path: Vec<&str> = path_str.split("/").collect();
+    let path: Vec<&str> = path_str.split("/").filter(|str| str.len() > 0).collect();
 
     let params: HashMap<String, String> = _req
         .uri()
@@ -59,11 +61,21 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
 
     match _req.method() {
         &Method::GET => {
-            if path.len() > 1 {
-                if path[1] == "api" {
-                    if path.len() == 3 {
+
+            if path_str == "/favicon.ico" {
+                if let Ok(file) = tokio::fs::File::open("pub/favicon.ico").await {
+                    let stream = tokio_util::codec::FramedRead::new(file, BytesCodec::new());
+                    let body = Body::wrap_stream(stream);
+
+                    return Ok(Response::new(body));
+                }
+            }
+
+            if path.len() > 0 {
+                if path[0] == "api" {
+                    if path.len() == 2 {
                         //model
-                        let model = Model::get(&conn, path[2]);
+                        let model = Model::get(&conn, path[1]);
                         response = String::from('{');
                         for r in model.fields {
                             response.push_str(format!("\"{}\": \"{}\",", r.0, r.1).as_str());
@@ -71,9 +83,9 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
                         response.pop();
                         response.push('}');
 
-                    }else if path.len() == 4 {
+                    }else if path.len() == 3 {
                         //instance
-                        let id = match path[3].parse::<u64>() {
+                        let id = match path[2].parse::<u64>() {
                             Ok(v) => v,
                             Err(e) => {
                                 response = format!("{{ \"err\": \"error parsing id\", \"exception\": {:?}}}", e);
@@ -81,48 +93,103 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
                             }
                         };
 
-                        let instance = Instance::get(conn, path[2], id);
+                        let instance = Instance::get(conn, path[1], id);
                         response = match instance {
                             Some(inst) => inst.json,
                             None => "null".to_string()
                         };
                     }
-                }else if path[1] == "ui" {
 
-                    response = ui::build_html_header();
+                }else if path[0] == "ui" {
+                    let mut tera = Tera::default();
+                    let container_tmpl = "pub/html/container.html";
+                    match tera.add_template_file(container_tmpl, Some("container")) {
+                        Ok(_) => {}, Err(e) => return Ok(Response::new(format!("template read error: {}",e).into()))
+                    };
+                    let mut body = String::new();
                     content_type = "text/html";
 
-                    if path.len() == 3 {
-                        let model = Model::get(&conn, path[2]);
-                        let html = ui::build_model_editor(&model);
-                        response.push_str( html.as_str() );
+                    if path.len() == 2 {
+                        let model = Model::get(&conn, path[1]);
+
+                        let instances: Value = match query::select_query(&conn, &model, 10, 0, json!({})) {
+                            Ok(json) => {
+                                match serde_json::from_str(&json) {
+                                    Ok(obj) => obj,
+                                    Err(e) => return Ok(Response::new(format!("error parsing json from query results: {}", e).into()))
+                                }
+                            },
+                            Err(e) => return Ok(Response::new(format!("query error: {}",e).into()))
+                        };
+
+                        body = match ui::instances_html(&mut tera, &model, instances.as_array().unwrap()) {
+                            Ok(html) => html,
+                            Err(e) => return Ok(Response::new(e.into()))
+                        };
 
                     }else {
                         let models = Model::get_all(&conn);
+                        let data_types = Model::get_types(&conn);
 
-                        for m in models {
-                            let html = ui::build_model_editor(&m);
-                            response.push_str( html.as_str() );
-                        }
+                        body = match ui::models_html(&mut tera, &models, &data_types) {
+                            Ok(html) => html,
+                            Err(e) => return Ok(Response::new(e.into()))
+                        };
                     }
 
-                    response.push_str(ui::build_html_footer().as_str());
+                    let mut tmp_ctx = Context::new();
+                    tmp_ctx.insert("content", &body);
+                    response = tera.render("container", &tmp_ctx).unwrap();
+
+                }else if path[0] == "pub" {
+                    let file_path = format!("pub/{}", &path[1..].join("/"));
+                    if file_path.ends_with(".css") {
+                        content_type = "text/css";
+                    }else if file_path.ends_with(".js") {
+                        content_type = "application/javascript";
+                    }
+
+                    if let Ok(file) = tokio::fs::File::open(file_path).await {
+                        let stream = tokio_util::codec::FramedRead::new(file, BytesCodec::new());
+                        let body = Body::wrap_stream(stream);
+
+                        return Ok(Response::new(body));
+
+                    }else {
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_FOUND)
+                            .body("Not Found".into())
+                            .unwrap());
+                    }
+
+                }else if path[0] == "types" {
+                    let data_types = Model::get_types(&conn);
+
+                    response = String::from('[');
+                    for dt in data_types {
+                        let dt_json = format!("{{ \"name\": \"{}\", \"meta_type\": \"{}\" }},", dt.name, dt.meta_type);
+                        response.push_str(dt_json.as_str());
+                    }
+                    if response.len() > 1 {
+                        response.pop();
+                    }
+                    response.push(']');
                 }
             }
         },
         &Method::DELETE => {
-            if path.len() > 2 {
-                if path[1] == "api" {
-                    if path.len() == 3 {
+            if path.len() > 1 {
+                if path[0] == "api" {
+                    if path.len() == 2 {
                         //model
-                        response = match Model::delete(conn, path[2]) {
+                        response = match Model::delete(conn, path[1]) {
                             Ok(_) => "{\"msg\": \"deleted\"}".to_string(),
                             Err(e) => e
                         };
 
-                    }else if path.len() == 4 {
+                    }else if path.len() == 3 {
                         //instance
-                        let id = match path[3].parse::<u64>() {
+                        let id = match path[2].parse::<u64>() {
                             Ok(v) => v,
                             Err(e) => {
                                 response = format!("{{ \"err\": \"error parsing id\", \"exception\": {:?}}}", e);
@@ -130,7 +197,7 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
                             }
                         };
 
-                        response = match Instance::delete(conn, path[2], id) {
+                        response = match Instance::delete(conn, path[1], id) {
                             Ok(_) => "{\"msg\": \"deleted\"}".to_string(),
                             Err(e) => e
                         };
@@ -139,9 +206,9 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
             }
         },
         &Method::PUT => {
-            if path.len() > 2 {
-                if path[1] == "api" {
-                    if path.len() == 3 {
+            if path.len() > 1 {
+                if path[0] == "api" {
+                    if path.len() == 2 {
                         //create instance
                         let b = match hyper::body::to_bytes(_req).await {
                             Ok(b) => b,
@@ -159,12 +226,12 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
                             }
                         };
 
-                        response = match Instance::create(conn, path[2], json_body) {
+                        response = match Instance::create(conn, path[1], json_body) {
                             Ok(_) => format!("{{\"msg\": \"created\"}}"),
                             Err(e) => format!("{{ \"err\": \"data structure error\", \"exception\": {:?}}}", e)
                         };
 
-                    }else if path.len() == 4 {
+                    }else if path.len() == 3 {
                         //update instance
                         response = String::from("instance update not implemented");
 
@@ -173,9 +240,9 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
             }
         },
         &Method::POST => {
-            if path.len() > 2 {
-                if path[1] == "api" {
-                    if path.len() == 3 {
+            if path.len() > 1 {
+                if path[0] == "api" {
+                    if path.len() == 2 {
                         //update model
                         let b = match hyper::body::to_bytes(_req).await {
                             Ok(b) => b,
@@ -193,15 +260,15 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
                             }
                         };
 
-                        response = match Model::update(conn, json_body, path[2]) {
+                        response = match Model::update(conn, json_body, path[1]) {
                             Ok(updated) => format!("{{\"msg\": \"{}\"}}", (match updated { true => "updated", false => "created" }) ),
                             Err(e) => format!("{{ \"err\": \"data structure error\", \"exception\": {:?}}}", e)
                         };
 
                     }
 
-                }else if path[1] == "query" {
-                    if path.len() == 3 {
+                }else if path[0] == "query" {
+                    if path.len() == 2 {
                         let b = match hyper::body::to_bytes(_req).await {
                             Ok(b) => b,
                             Err(e) => {
@@ -244,7 +311,7 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
                             None => 10
                         };
 
-                        let model = Model::get(&conn, path[2]);
+                        let model = Model::get(&conn, path[1]);
 
                         response = match query::select_query(&conn, &model, limit, offset, json_body) {
                             Ok(data) => data,

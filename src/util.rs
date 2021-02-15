@@ -1,4 +1,32 @@
 use serde_json::Value;
+use std::fmt;
+
+pub enum MetaType {
+    Primitive,
+    Emum,
+    Model
+}
+
+impl fmt::Display for MetaType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MetaType::Primitive => write!(f, "primitive"),
+            MetaType::Emum => write!(f, "enum"),
+            MetaType::Model => write!(f, "model")
+        }
+    }
+}
+
+pub struct DataType {
+    pub name: String,
+    pub meta_type: MetaType
+}
+
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}: {}", self.name, self.meta_type)
+    }
+}
 
 pub fn datatype_rust_sql(v: &Value) -> String {
     let mut value_datatype = "text";
