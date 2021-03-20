@@ -5,7 +5,11 @@
             {{ field.0 }}
         </div>
         <div class="col {{ field.1 }}-field">
-            {{ instance[i] }}
+            {% if field.0 == "id" %}
+                {{ instance[i] }}
+            {% else %}
+                <span class="toggled-input" input-type="{{ field.1 }}">{{ instance[i] }}</span>
+            {% endif %}
         </div>
         {% if i == 0 %}
         <div class="col-sm-2 btn-group" role="group" aria-label="instance toolbar">

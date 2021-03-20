@@ -233,8 +233,26 @@ async fn service(conn: PooledConnection<SqliteConnectionManager>, _req: Request<
 
                     }else if path.len() == 3 {
                         //update instance
-                        response = String::from("instance update not implemented");
+                        let b = match hyper::body::to_bytes(_req).await {
+                            Ok(b) => b,
+                            Err(e) => {
+                                response = format!("{{ \"err\": \"error receiving request\", \"exception\": {:?}}}", e);
+                                return Ok(Response::new(response.into()));
+                            }
+                        };
 
+                        let json_body: Value = match serde_json::from_slice(b.as_ref()) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                response = format!("{{ \"err\": \"error parsing json\", \"exception\": {:?}}}", e);
+                                return Ok(Response::new(response.into()));
+                            }
+                        };
+
+                        response = match Instance::update(conn, path[1], json_body, format!("id=\"{}\"", path[2])) {
+                            Ok(_) => format!("{{\"msg\": \"created\"}}"),
+                            Err(e) => format!("{{ \"err\": \"data structure error\", \"exception\": {:?}}}", e)
+                        };
                     }
                 }
             }

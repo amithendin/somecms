@@ -1,3 +1,80 @@
+jQuery.fn.extend({
+  renameAttr: function( name, newName, removeData ) {
+    var val;
+    return this.each(function() {
+      val = jQuery.attr( this, name );
+      jQuery.attr( this, newName, val );
+      jQuery.removeAttr( this, name );
+      // remove original data
+      if (removeData !== false){
+        jQuery.removeData( this, name.replace('data-','') );
+      }
+    });
+  }
+});
+
+function serializeInputGroups(inputGroupsParentSelector) {
+    var obj = {};
+
+    $(inputGroupsParentSelector+' .input-group').each((i, inputGroup) => {
+        var fieldName = null;
+
+        if ( $(inputGroup).attr('field-name') ) {
+            fieldName = $(inputGroup).attr('field-name');
+
+        }else if ( $(inputGroup).attr('field-name-input')  ) {
+            fieldName = $(inputGroup).find( $(inputGroup).attr('field-name-input') ).val();
+
+        }else {
+            fieldName = $(inputGroup).children('.input-group-text').text();
+        }
+
+        var fieldValue = null;
+        if ( $(inputGroup).attr('field-value') ) {
+            fieldValue = $(inputGroup).attr('field-value');
+
+        }else if ( $(inputGroup).attr('field-value-input')  ) {
+            fieldValue = $(inputGroup).find( $(inputGroup).attr('field-value-input') ).val();
+
+        }else {
+            fieldValue = $(inputGroup).find('input').val();
+        }
+
+        var dataType = $(inputGroup).children('input').attr('type');
+
+        if (dataType === 'number') {
+            var step = $(inputGroup).children('input').attr('step');
+
+            if (step === '1') {
+                obj[fieldName] = parseInt(fieldValue);
+            }else {
+                obj[fieldName] = parseFloat(fieldValue);
+            }
+
+        }else if (dataType === 'checkbox') {
+            if ($(inputGroup).children('input').is(":checked")) {
+                obj[fieldName] = true;
+            }else {
+                obj[fieldName] = false;
+            }
+
+        }else {
+            obj[fieldName] = fieldValue;
+        }
+    });
+
+    return obj;
+}
+
+function getAttributesStr ( $node ) {
+    var attrs = '';
+    $.each( $node[0].attributes, function ( index, attribute ) {
+        attrs += attribute.name+'="'+attribute.value+'" ';
+    } );
+
+    return attrs;
+}
+
 function bindEventsTo (root) {
     $(root).find('.toggle-btn').data('toggled', {on: true});
 
@@ -116,61 +193,26 @@ function bindEventsTo (root) {
         bindEventsTo(newElement);
         $(containerElement).append(newElement);
     });
+
+    $(root).find('span.toggled-input').click((e) => {
+        var data = $(e.target).text();
+        $(e.target).renameAttr('input-type', 'type' );
+        var attrs = getAttributesStr( $(e.target) );
+
+        var inp = $(e.target).replaceWith($('<input '+attrs+'value="'+data+'"/>'));
+        bindEventsTo($(e.target).parent());
+    });
+
+    $(root).find('input.toggled-input').on( "focusout", (e) => {
+        var data = $(e.target).val();
+        $(e.target).renameAttr('type', 'input-type');
+        var attrs = getAttributesStr( $(e.target) );
+        console.log(attrs);
+
+        $(e.target).replaceWith($('<span '+attrs+'>'+data+'</span>'));
+    });
 }
 
 $(() => {
     bindEventsTo(document);
 });
-
-function serializeInputGroups(inputGroupsParentSelector) {
-    var obj = {};
-
-    $(inputGroupsParentSelector+' .input-group').each((i, inputGroup) => {
-        var fieldName = null;
-
-        if ( $(inputGroup).attr('field-name') ) {
-            fieldName = $(inputGroup).attr('field-name');
-
-        }else if ( $(inputGroup).attr('field-name-input')  ) {
-            fieldName = $(inputGroup).find( $(inputGroup).attr('field-name-input') ).val();
-
-        }else {
-            fieldName = $(inputGroup).children('.input-group-text').text();
-        }
-
-        var fieldValue = null;
-        if ( $(inputGroup).attr('field-value') ) {
-            fieldValue = $(inputGroup).attr('field-value');
-
-        }else if ( $(inputGroup).attr('field-value-input')  ) {
-            fieldValue = $(inputGroup).find( $(inputGroup).attr('field-value-input') ).val();
-
-        }else {
-            fieldValue = $(inputGroup).find('input').val();
-        }
-
-        var dataType = $(inputGroup).children('input').attr('type');
-
-        if (dataType === 'number') {
-            var step = $(inputGroup).children('input').attr('step');
-
-            if (step === '1') {
-                obj[fieldName] = parseInt(fieldValue);
-            }else {
-                obj[fieldName] = parseFloat(fieldValue);
-            }
-
-        }else if (dataType === 'checkbox') {
-            if ($(inputGroup).children('input').is(":checked")) {
-                obj[fieldName] = true;
-            }else {
-                obj[fieldName] = false;
-            }
-
-        }else {
-            obj[fieldName] = fieldValue;
-        }
-    });
-
-    return obj;
-}

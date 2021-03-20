@@ -115,4 +115,9 @@ impl Instance {
 
         Ok(())
     }
+
+    pub fn update(conn: PooledConnection<SqliteConnectionManager>, model: &str, inst: Value, query: String) -> Result<(), String> {
+
+        Ok(())
+    }
 }

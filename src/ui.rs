@@ -71,7 +71,15 @@ pub fn instance_ctx(model: &Model, inst: &Value) -> Context {
     let mut obj = Vec::new();
     for (k, t) in &model.fields {
         obj.push( match inst.as_object().unwrap().get(k) {
-            Some(v) => format!("{}",v),
+            Some(v) => {
+                match v {
+                    Value::String(str) => str.clone(),
+                    Value::Bool(b) => format!("{}", b),
+                    Value::Number(n) => format!("{}", n),
+                    Value::Null => String::from("null"),
+                    _=> format!("{}", v)
+                }
+            },
             None => "null".into()
         });
     }
